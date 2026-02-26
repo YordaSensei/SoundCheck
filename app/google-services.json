@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "95220558629",
+    "project_id": "soundcheck-db",
+    "storage_bucket": "soundcheck-db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:95220558629:android:62ba2876e4b4c92231c8cc",
+        "android_client_info": {
+          "package_name": "com.esense.soundcheck"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCJP5C3Rd-eKTaiSn_JILNpSu2KcduTYb4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
