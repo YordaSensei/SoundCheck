@@ -63,6 +63,7 @@ class MainActivity : AppCompatActivity() {
         bindSliderToInput(threshSlider, threshEditText)
         threshSaveButton.setOnClickListener {
             val value = threshSlider.progress
+            //Firebase
             // database.child("settings").child("threshold").setValue(value)
             Toast.makeText(this, "Microphone threshold set to $value dB", Toast.LENGTH_SHORT).show()
         }
@@ -74,6 +75,7 @@ class MainActivity : AppCompatActivity() {
         bindSliderToInput(timerSlider, timerEditText)
         timerSaveButton.setOnClickListener {
             val value = timerSlider.progress
+            //Firebase
             // database.child("settings").child("timer").setValue(value)
             Toast.makeText(this, "Timer set to $value secs", Toast.LENGTH_SHORT).show()
         }
@@ -85,6 +87,7 @@ class MainActivity : AppCompatActivity() {
         bindSliderToInput(volumeSlider, volumeEditText)
         volumeSaveButton.setOnClickListener {
             val value = volumeSlider.progress
+            //Firebase
             // database.child("settings").child("volume").setValue(value)
             Toast.makeText(this, "Speaker volume set to $value dB", Toast.LENGTH_SHORT).show()
         }
@@ -102,7 +105,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         val adapter = LogEntryAdapter(logEntries) { entry ->
-            // Handle tap — add detail screen or dialog here later
+            // Handle selection
             Toast.makeText(this, "Tapped: ${entry.dateTime}", Toast.LENGTH_SHORT).show()
         }
         recyclerView.adapter = adapter
