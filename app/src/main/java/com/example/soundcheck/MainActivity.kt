@@ -22,8 +22,21 @@ import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.chip.Chip
 import com.google.android.material.datepicker.MaterialDatePicker
 
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+
 class MainActivity : AppCompatActivity() {
+
+    private lateinit var auth: FirebaseAuth
+    private lateinit var firestore: FirebaseFirestore
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        //initialization
+        FirebaseApp.initializeApp(this)
+        auth = FirebaseAuth.getInstance()
+        firestore = FirebaseFirestore.getInstance()
+
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
