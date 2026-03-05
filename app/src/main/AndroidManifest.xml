@@ -23,9 +23,6 @@
         <activity
             android:name=".DeviceDetailActivity"
             android:theme="@style/DarkNumberPickerTheme"/>
-        <activity android:name=".NoiseLimitActivity" />
-        <activity android:name=".DurationActivity" />
-
         <meta-data
             android:name="preloaded_fonts"
             android:resource="@array/preloaded_fonts" />
