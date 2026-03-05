@@ -1,30 +1,39 @@
 package com.example.soundcheck
 
+import android.animation.ValueAnimator
+import android.animation.ArgbEvaluator
+import android.content.Intent
+import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.view.View
+import android.view.animation.DecelerateInterpolator
 import android.widget.Button
+import android.widget.ImageButton
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Toast
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import android.text.Editable
 import android.text.TextWatcher
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import android.view.View
-import android.widget.ImageButton
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButtonToggleGroup
-import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.chip.Chip
 import com.google.android.material.datepicker.MaterialDatePicker
-
+import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -32,7 +41,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var firestore: FirebaseFirestore
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        //initialization
         FirebaseApp.initializeApp(this)
         auth = FirebaseAuth.getInstance()
         firestore = FirebaseFirestore.getInstance()
@@ -47,129 +55,76 @@ class MainActivity : AppCompatActivity() {
         }
 
         val toggleGroup = findViewById<MaterialButtonToggleGroup>(R.id.toggleGroup)
-        val controlPanelView = findViewById<View>(R.id.controlPanelContainer)
-        val logHistoryView = findViewById<View>(R.id.logHistoryContainer)
+        val controlPanelContainer = findViewById<ScrollView>(R.id.controlPanelContainer)
+        //val logHistoryContainer = findViewById<LinearLayout>(R.id.logHistoryContainer)
+        val btnControl = findViewById<Button>(R.id.btnControlPanel)
+        val btnLog = findViewById<Button>(R.id.btnLogHistory)
 
-        // Set default
-        toggleGroup.check(R.id.btnControlPanel)
-        logHistoryView.visibility = View.GONE
+        fun selectTab(selectedBtn: Button, unselectedBtn: Button) {
+            ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 250
+                interpolator = DecelerateInterpolator()
+                addUpdateListener {
+                    val fraction = it.animatedFraction
+
+                    // Use backgroundTintList instead of setting background directly
+                    selectedBtn.backgroundTintList = ColorStateList.valueOf(
+                        ArgbEvaluator().evaluate(fraction, Color.TRANSPARENT, Color.WHITE) as Int
+                    )
+                    unselectedBtn.backgroundTintList = ColorStateList.valueOf(
+                        ArgbEvaluator().evaluate(fraction, Color.WHITE, Color.TRANSPARENT) as Int
+                    )
+
+                    selectedBtn.setTextColor(
+                        ArgbEvaluator().evaluate(fraction, Color.WHITE, Color.parseColor("#8B00FF")) as Int
+                    )
+                    unselectedBtn.setTextColor(
+                        ArgbEvaluator().evaluate(fraction, Color.parseColor("#8B00FF"), Color.WHITE) as Int
+                    )
+                }
+            }.start()
+        }
+
+        selectTab(btnControl, btnLog)
 
         toggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (isChecked) {
                 when (checkedId) {
                     R.id.btnControlPanel -> {
-                        controlPanelView.visibility = View.VISIBLE
-                        logHistoryView.visibility = View.GONE
+                        selectTab(btnControl, btnLog)
+                        controlPanelContainer.visibility = View.VISIBLE
+                        //logHistoryContainer.visibility = View.GONE
                     }
                     R.id.btnLogHistory -> {
-                        controlPanelView.visibility = View.GONE
-                        logHistoryView.visibility = View.VISIBLE
+                        selectTab(btnLog, btnControl)
+                        controlPanelContainer.visibility = View.GONE
+                        //logHistoryContainer.visibility = View.VISIBLE
                     }
                 }
             }
         }
 
-        // --- Microphone Threshold ---
-        val threshSlider = findViewById<SeekBar>(R.id.threshSeekBar)
-        val threshEditText = findViewById<TextInputEditText>(R.id.threshValueInput)
-        val threshSaveButton = findViewById<Button>(R.id.threshSaveBtn)
-        bindSliderToInput(threshSlider, threshEditText)
-        threshSaveButton.setOnClickListener {
-            val value = threshSlider.progress
-            //Firebase
-            // database.child("settings").child("threshold").setValue(value)
-            Toast.makeText(this, "Microphone threshold set to $value dB", Toast.LENGTH_SHORT).show()
-        }
+        val deviceRecycler = findViewById<RecyclerView>(R.id.roomRecycler)
+        deviceRecycler.layoutManager = GridLayoutManager(this, 2)
 
-        // --- Timer ---
-        val timerSlider = findViewById<SeekBar>(R.id.timerSeekBar)
-        val timerEditText = findViewById<TextInputEditText>(R.id.timerValueInput)
-        val timerSaveButton = findViewById<Button>(R.id.timerSaveBtn)
-        bindSliderToInput(timerSlider, timerEditText)
-        timerSaveButton.setOnClickListener {
-            val value = timerSlider.progress
-            //Firebase
-            // database.child("settings").child("timer").setValue(value)
-            Toast.makeText(this, "Timer set to $value secs", Toast.LENGTH_SHORT).show()
-        }
-
-        // --- Speaker Volume ---
-        val volumeSlider = findViewById<SeekBar>(R.id.volumeSeekBar)
-        val volumeEditText = findViewById<TextInputEditText>(R.id.volumeValueInput)
-        val volumeSaveButton = findViewById<Button>(R.id.volumeSaveBtn)
-        bindSliderToInput(volumeSlider, volumeEditText)
-        volumeSaveButton.setOnClickListener {
-            val value = volumeSlider.progress
-            //Firebase
-            // database.child("settings").child("volume").setValue(value)
-            Toast.makeText(this, "Speaker volume set to $value dB", Toast.LENGTH_SHORT).show()
-        }
-
-        // --- Log/History Setup ---
-        val recyclerView = findViewById<RecyclerView>(R.id.logRecyclerView)
-        recyclerView.layoutManager = LinearLayoutManager(this)
-
-// Dummy data for now — replace with Firebase fetch later
-        val logEntries = mutableListOf(
-            LogEntry("02-28-2026 | 13:00:12", 67),
-            LogEntry("02-28-2026 | 12:45:03", 72),
-            LogEntry("02-28-2026 | 11:30:55", 58),
-            LogEntry("02-27-2026 | 09:15:44", 81),
+        val devices = listOf(
+            Device("1", "SoundCheck #1", "7th Floor"),
         )
 
-        val adapter = LogEntryAdapter(logEntries) { entry ->
-            // Handle selection
-            Toast.makeText(this, "Tapped: ${entry.dateTime}", Toast.LENGTH_SHORT).show()
-        }
-        recyclerView.adapter = adapter
-
-// Sort toggle (newest/oldest)
-        var sortedNewest = true
-        findViewById<ImageButton>(R.id.btnSort).setOnClickListener {
-            sortedNewest = !sortedNewest
-            val sorted = if (sortedNewest)
-                logEntries.sortedByDescending { it.dateTime }
-            else
-                logEntries.sortedBy { it.dateTime }
-            adapter.updateList(sorted)
-        }
-
-// Date filter chip
-        findViewById<Chip>(R.id.chipFilterDate).setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                // Show DatePickerDialog and filter by selected date
-                val datePicker = MaterialDatePicker.Builder.datePicker()
-                    .setTitleText("Filter by date")
-                    .build()
-                datePicker.addOnPositiveButtonClickListener { selection ->
-                    val sdf = SimpleDateFormat("MM-dd-yyyy", Locale.getDefault())
-                    val selectedDate = sdf.format(Date(selection))
-                    adapter.updateList(logEntries.filter { it.dateTime.startsWith(selectedDate) })
-                }
-                datePicker.show(supportFragmentManager, "DATE_PICKER")
-            } else {
-                adapter.updateList(logEntries)
+        val deviceAdapter = DeviceAdapter(devices) { device ->
+            val intent = Intent(this, DeviceDetailActivity::class.java).apply {
+                putExtra("device_name", device.name)
+                putExtra("device_room", device.room)
             }
+            startActivity(intent)
         }
-
-// dB filter chip
-        findViewById<Chip>(R.id.chipFilterDb).setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) {
-                // Filter entries above threshold, e.g. >70dB
-                adapter.updateList(logEntries.filter { it.peakDb > 70 })
-            } else {
-                adapter.updateList(logEntries)
-            }
-        }
+        deviceRecycler.adapter = deviceAdapter
     }
 
-    // Reusable function to sync a SeekBar and TextInputEditText together
     private fun bindSliderToInput(seekBar: SeekBar, editText: TextInputEditText) {
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (fromUser) {
-                    editText.setText(progress.toString())
-                }
+                if (fromUser) editText.setText(progress.toString())
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
@@ -180,9 +135,7 @@ class MainActivity : AppCompatActivity() {
                 val input = s.toString()
                 if (input.isNotEmpty()) {
                     val value = input.toIntOrNull() ?: 0
-                    if (value <= seekBar.max) {
-                        seekBar.progress = value
-                    }
+                    if (value <= seekBar.max) seekBar.progress = value
                 }
             }
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
