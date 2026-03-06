@@ -1,12 +1,18 @@
 package com.example.soundcheck
 
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
+import com.google.firebase.database.FirebaseDatabase
 
 class DeviceDetailActivity : AppCompatActivity() {
+
+    companion object {
+        private const val TAG = "SoundCheck_FB"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -15,34 +21,50 @@ class DeviceDetailActivity : AppCompatActivity() {
         val deviceName = intent.getStringExtra("device_name") ?: "Unknown"
         val deviceRoom = intent.getStringExtra("device_room") ?: "Room"
 
+        // -------- SETUP VIEW REFERENCES --------
         findViewById<TextView>(R.id.detailDeviceName).text = deviceName
         findViewById<TextView>(R.id.detailDeviceRoom).text = deviceRoom
         findViewById<ImageButton>(R.id.btnBack).setOnClickListener { finish() }
 
-        // --- Noise Limit ---
-        val slider = findViewById<CircularSliderView>(R.id.circularSlider)
-        val tvDbValue = findViewById<TextView>(R.id.tvDbValue)
-        slider.onProgressChanged = { value -> tvDbValue.text = value.toString() }
-
-        // --- Duration pickers ---
-        val pickerHours = findViewById<NumberPicker>(R.id.pickerHours)
-        val pickerMinutes = findViewById<NumberPicker>(R.id.pickerMinutes)
-        val pickerSeconds = findViewById<NumberPicker>(R.id.pickerSeconds)
+        val slider            = findViewById<CircularSliderView>(R.id.circularSlider)
+        val tvDbValue         = findViewById<TextView>(R.id.tvDbValue)
+        val pickerHours       = findViewById<NumberPicker>(R.id.pickerHours)
+        val pickerMinutes     = findViewById<NumberPicker>(R.id.pickerMinutes)
+        val pickerSeconds     = findViewById<NumberPicker>(R.id.pickerSeconds)
         val tvSelectedDuration = findViewById<TextView>(R.id.tvSelectedDuration)
+        val noiseLimitView    = findViewById<ConstraintLayout>(R.id.noiseLimitView)
+        val durationView      = findViewById<ConstraintLayout>(R.id.durationView)
+        val btnNoiseLimit     = findViewById<LinearLayout>(R.id.btnNoiseLimit)
+        val btnDuration       = findViewById<LinearLayout>(R.id.btnDuration)
+        val btnSaveSettings   = findViewById<Button>(R.id.btnSaveSettings)
 
+        // -------- INITIALIZE CIRCULAR SLIDER --------
+        slider.setRange(0, 119)
+        slider.setValue(30)       // Default: 30 dB
+        tvDbValue.text = "30"
+
+        slider.onProgressChanged = { value ->
+            tvDbValue.text = value.toString()
+        }
+
+        // -------- INITIALIZE NUMBER PICKERS --------
         pickerHours.minValue = 0
-        pickerHours.maxValue = 99
+        pickerHours.maxValue = 23
         pickerHours.setFormatter { String.format("%02d", it) }
+        pickerHours.value = 0
 
         pickerMinutes.minValue = 0
         pickerMinutes.maxValue = 59
         pickerMinutes.setFormatter { String.format("%02d", it) }
+        pickerMinutes.value = 0
 
         pickerSeconds.minValue = 0
         pickerSeconds.maxValue = 59
         pickerSeconds.setFormatter { String.format("%02d", it) }
+        pickerSeconds.value = 10  // Default: 10 seconds
 
-        val updateDuration = {
+        // -------- UPDATE DURATION DISPLAY --------
+        val updateDurationDisplay = {
             tvSelectedDuration.text = String.format(
                 "%02d:%02d:%02d",
                 pickerHours.value,
@@ -50,43 +72,95 @@ class DeviceDetailActivity : AppCompatActivity() {
                 pickerSeconds.value
             )
         }
-        pickerHours.setOnValueChangedListener { _, _, _ -> updateDuration() }
-        pickerMinutes.setOnValueChangedListener { _, _, _ -> updateDuration() }
-        pickerSeconds.setOnValueChangedListener { _, _, _ -> updateDuration() }
 
-        // --- Tab switching ---
-        val noiseLimitView = findViewById<ConstraintLayout>(R.id.noiseLimitView)
-        val durationView = findViewById<ConstraintLayout>(R.id.durationView)
-        val btnNoiseLimit = findViewById<LinearLayout>(R.id.btnNoiseLimit)
-        val btnDuration = findViewById<LinearLayout>(R.id.btnDuration)
+        updateDurationDisplay()
 
+        pickerHours.setOnValueChangedListener   { _, _, _ -> updateDurationDisplay() }
+        pickerMinutes.setOnValueChangedListener { _, _, _ -> updateDurationDisplay() }
+        pickerSeconds.setOnValueChangedListener { _, _, _ -> updateDurationDisplay() }
+
+        // -------- TAB TOGGLE --------
         fun selectNoiseLimit() {
             noiseLimitView.visibility = View.VISIBLE
-            durationView.visibility = View.GONE
+            durationView.visibility   = View.GONE
             btnNoiseLimit.alpha = 1f
-            btnDuration.alpha = 0.5f
+            btnDuration.alpha   = 0.5f
         }
 
         fun selectDuration() {
             noiseLimitView.visibility = View.GONE
-            durationView.visibility = View.VISIBLE
+            durationView.visibility   = View.VISIBLE
             btnNoiseLimit.alpha = 0.5f
-            btnDuration.alpha = 1f
+            btnDuration.alpha   = 1f
         }
 
-        selectNoiseLimit()
-        btnNoiseLimit.setOnClickListener { selectNoiseLimit() }
-        btnDuration.setOnClickListener { selectDuration() }
+        // Default tab matches XML visibility="visible" on durationView
+        selectDuration()
 
-        // --- Save ---
-        findViewById<Button>(R.id.btnSaveSettings).setOnClickListener {
-            val noiseLimit = slider.progress
-            val totalSeconds = (pickerHours.value * 3600) +
-                    (pickerMinutes.value * 60) +
-                    pickerSeconds.value
-            // firestore.collection("devices").document(deviceId)
-            //     .update(mapOf("noiseLimit" to noiseLimit, "duration" to totalSeconds))
-            finish()
+        btnNoiseLimit.setOnClickListener { selectNoiseLimit() }
+        btnDuration.setOnClickListener   { selectDuration() }
+
+        // -------- FIREBASE INSTANCE --------
+        // Specify the database URL explicitly to ensure correct region (asia-southeast1)
+        val database    = FirebaseDatabase.getInstance("https://soundcheck-db-default-rtdb.asia-southeast1.firebasedatabase.app")
+        val settingsRef = database.getReference("settings")
+
+        // -------- FIREBASE READ ON ACTIVITY START --------
+        Log.d(TAG, "Reading settings from Firebase...")
+
+        settingsRef.get()
+            .addOnSuccessListener { snapshot ->
+                val thresholdDb = when (val value = snapshot.child("threshold_db").getValue()) {
+                    is Number -> value.toInt()
+                    is String -> value.toIntOrNull() ?: 30
+                    else -> 30
+                }
+                val alarmMs = when (val value = snapshot.child("alarm_duration_ms").getValue()) {
+                    is Number -> value.toLong()
+                    is String -> value.toLongOrNull() ?: 10000L
+                    else -> 10000L
+                }
+
+                Log.d(TAG, "Settings loaded → threshold_db=$thresholdDb | alarm_duration_ms=$alarmMs")
+
+                // Populate slider
+                slider.setValue(thresholdDb)
+                tvDbValue.text = thresholdDb.toString()
+
+                // Populate pickers from milliseconds
+                val totalSeconds = (alarmMs / 1000L).toInt()
+                pickerHours.value   = totalSeconds / 3600
+                pickerMinutes.value = (totalSeconds % 3600) / 60
+                pickerSeconds.value = totalSeconds % 60
+
+                updateDurationDisplay()
+            }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Failed to load settings: ${e.message}")
+            }
+
+        // -------- FIREBASE WRITE ON SAVE --------
+        btnSaveSettings.setOnClickListener {
+            val thresholdDb    = slider.getValue()
+            val h              = pickerHours.value
+            val m              = pickerMinutes.value
+            val s              = pickerSeconds.value
+            val alarmDurationMs = ((h * 3600L) + (m * 60L) + s) * 1000L
+
+            Log.d(TAG, "Saving → threshold_db=$thresholdDb | alarm_duration_ms=$alarmDurationMs")
+
+            val updates = mapOf(
+                "settings/threshold_db"     to thresholdDb,
+                "settings/alarm_duration_ms" to alarmDurationMs
+            )
+
+            database.reference.updateChildren(updates)
+                .addOnSuccessListener {
+                    Log.d(TAG, "Save successful! threshold_db=$thresholdDb | alarm_duration_ms=$alarmDurationMs")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Save FAILED: ${e.message}")
+                }
         }
     }
 }

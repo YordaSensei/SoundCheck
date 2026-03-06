@@ -1,0 +1,662 @@
+// ===== ESP32 Sound Meter with Dynamic Alert & Firebase Integration =====
+// Product: SoundCheck (E-Sense)
+// Features: dB SPL conversion, WiFi + Firebase sync, shuffled MP3 playback, soft cooldown alarm logic
+
+#include "HardwareSerial.h"
+#include "DFRobotDFPlayerMini.h"
+#include "WiFi.h"
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
+#include <Math.h>
+
+// -------- WiFi & Firebase Credentials --------
+#define WIFI_SSID        "PLDTHOMEFIBRUb4Ef"
+#define WIFI_PASSWORD    "PLDTWIFI2tYkj"
+#define FIREBASE_DB_URL  "https://soundcheck-db-default-rtdb.asia-southeast1.firebasedatabase.app/"
+
+// -------- MP3 PLAYER (DFPlayer Mini) --------
+#define DF_RX 27
+#define DF_TX 26
+DFRobotDFPlayerMini myDFPlayer;
+
+// -------- MICROPHONE --------
+const int soundAO = 34;
+
+// -------- QUIET LED PINS --------
+const int ledQuiet[] = {23, 19, 18, 5};
+
+// -------- LOUD LED PINS --------
+const int ledLoud[]  = {17, 16, 4, 14};
+
+// -------- THRESHOLDS & DEFAULTS --------
+#define DEFAULT_THRESHOLD_DB      60.0f   // Matches current Firebase value
+#define DEFAULT_ALARM_DURATION_MS 4000UL  // Matches current Firebase value
+#define SOFT_COOLDOWN_DURATION    4000UL
+
+// -------- TIMING CONSTANTS --------
+#define FIREBASE_POLL_MS      30000UL  // Poll Firebase every 30 seconds
+#define SERIAL_LOG_INTERVAL    2000UL  // Print log line every 2 seconds
+#define DELTA_MS_CAP           2000UL  // Cap delta to prevent loudAccumMs spike after Firebase poll
+#define MAX_TRACKS_PROBE         99    // Maximum track index to probe on SD card at startup
+#define PROBE_MISS_LIMIT          3    // Stop probing after this many consecutive non-responses
+#define AUDIO_PLAY_TIMEOUT_MS 60000UL  // Failsafe: force-reset isAudioPlaying after 60 seconds
+#define HTTP_TIMEOUT_MS        5000    // Max time to wait for a Firebase REST response
+
+// ======================================================
+// -------- TEST TRACK MODE --------
+//
+// Plays one specific track on boot and halts.
+// Normal sound monitoring does NOT run while this is active.
+//
+// TO TEST A TRACK:
+//   1. Uncomment the #define TEST_TRACK line below
+//   2. Change the number to the track you want:
+//        1 = 0001.mp3
+//        2 = 0002.mp3
+//        3 = 0003.mp3  ... and so on
+//   3. Flash — it will play that track once and stop
+//   4. Check serial monitor for result
+//   5. Comment the line back out and reflash to resume
+//      normal alarm + shuffle operation
+//
+// #define TEST_TRACK 5
+//
+// ======================================================
+
+// -------- Runtime Settings (updated from Firebase) --------
+float         thresholdDB         = DEFAULT_THRESHOLD_DB;
+unsigned long alarmDurationMs     = DEFAULT_ALARM_DURATION_MS;
+float         lastThresholdDB     = -1.0f;
+unsigned long lastAlarmDurationMs = 0xFFFFFFFFUL;  // Sentinel — ensures first read always applies
+
+// -------- Firebase connection status (for log display) --------
+bool firebaseConnected = false;
+
+// -------- Sound Smoothing --------
+float smoothDB = 0.0f;
+
+// -------- Alarm State Machine --------
+// NOTE: Renamed to avoid conflict with Arduino.h RISING macro
+enum AlarmState { STATE_QUIET, STATE_RISING, STATE_ALARMING };
+AlarmState alarmState = STATE_QUIET;
+
+// -------- Timers & Counters --------
+unsigned long loudAccumMs         = 0UL;
+unsigned long softCooldownStartMs = 0UL;
+unsigned long totalLoudSeconds    = 0UL;
+unsigned long lastSecondMark      = 0UL;
+unsigned long lastFirebasePoll    = 0UL;
+unsigned long lastLogTime         = 0UL;
+unsigned long lastLoopTime        = 0UL;
+
+// -------- MP3 State --------
+bool          dfPlayerReady  = false;
+bool          isAudioPlaying = false;
+unsigned long audioStartMs   = 0UL;
+int           currentTrack   = 0;
+int           totalTracks    = 0;
+
+
+// ======================================================
+// -------- dB SPL CONVERSION --------
+// ======================================================
+float convertToDB(int signalMax, int signalMin) {
+  int peakToPeak = signalMax - signalMin;
+  if (peakToPeak < 80) return 0.0f;
+  float voltage = peakToPeak * (3.3f / 4095.0f);
+  float dB = (voltage > 0.0f) ? (20.0f * log10f(voltage / 0.00631f)) : 0.0f;
+  return constrain(dB, 0.0f, 119.0f);
+}
+
+
+// ======================================================
+// -------- SMOOTH dB (weighted average) --------
+// ======================================================
+void updateSmoothedDB(float newDB) {
+  smoothDB = (smoothDB * 3.0f + newDB) / 4.0f;
+}
+
+
+// ======================================================
+// -------- DRAIN DFPLAYER BUFFER --------
+// ======================================================
+void drainDFPlayerBuffer() {
+  unsigned long drainStart = millis();
+  int drained = 0;
+  while (millis() - drainStart < 500) {
+    if (myDFPlayer.available()) {
+      myDFPlayer.readType();
+      drained++;
+    }
+    delay(10);
+  }
+  if (drained > 0) {
+    Serial.print("[INIT] Drained ");
+    Serial.print(drained);
+    Serial.println(" stale message(s) from DFPlayer buffer.");
+  } else {
+    Serial.println("[INIT] DFPlayer buffer clean.");
+  }
+}
+
+
+// ======================================================
+// -------- FIREBASE REST GET (single value) --------
+// ======================================================
+String firebaseGet(const char* path) {
+  if (WiFi.status() != WL_CONNECTED) return "";
+
+  WiFiClientSecure client;
+  client.setInsecure();
+  client.setTimeout(HTTP_TIMEOUT_MS);
+
+  HTTPClient http;
+  String url = String(FIREBASE_DB_URL) + path + ".json";
+  http.begin(client, url);
+  http.setTimeout(HTTP_TIMEOUT_MS);
+
+  int code = http.GET();
+  String body = "";
+  if (code == 200) {
+    body = http.getString();
+    body.trim();
+  } else {
+    Serial.print("[FB] GET failed for ");
+    Serial.print(path);
+    Serial.print(" — HTTP ");
+    Serial.println(code);
+  }
+  http.end();
+  return body;
+}
+
+
+// ======================================================
+// -------- STRUCTURED SERIAL LOGGING --------
+// ======================================================
+void logStatus(const char* stateStr, const char* alarmStr) {
+  if (millis() - lastLogTime < SERIAL_LOG_INTERVAL) return;
+  lastLogTime = millis();
+
+  unsigned long countdown = (loudAccumMs < alarmDurationMs)
+    ? (alarmDurationMs - loudAccumMs) / 1000UL
+    : 0UL;
+
+  unsigned long cooldownRemaining = 0UL;
+  if (softCooldownStartMs > 0) {
+    unsigned long elapsed = millis() - softCooldownStartMs;
+    cooldownRemaining = (elapsed < SOFT_COOLDOWN_DURATION)
+      ? (SOFT_COOLDOWN_DURATION - elapsed) / 1000UL
+      : 0UL;
+  }
+
+  Serial.print("[SoundCheck] dB=");
+  Serial.print(smoothDB, 1);
+  Serial.print(" | Threshold=");
+  Serial.print(thresholdDB, 1);
+  Serial.print(" | State=");
+  Serial.print(stateStr);
+  Serial.print(" | Countdown=");
+  Serial.print(countdown);
+  Serial.print("s | CooldownTimer=");
+  Serial.print(cooldownRemaining);
+  Serial.print("s | TotalLoud=");
+  Serial.print(totalLoudSeconds);
+  Serial.print("s | AlarmDuration=");
+  Serial.print(alarmDurationMs / 1000UL);
+  Serial.print("s | FB=");
+  Serial.print(firebaseConnected ? "READY" : "NOT_READY");
+  Serial.print(" | Alarm=");
+  Serial.print(alarmStr);
+
+  if (isAudioPlaying && audioStartMs > 0) {
+    Serial.print(" | PlaybackElapsed=");
+    Serial.print((millis() - audioStartMs) / 1000UL);
+    Serial.print("s | Track=");
+    Serial.print(currentTrack);
+    Serial.print("/");
+    Serial.print(totalTracks);
+  }
+
+  Serial.println();
+}
+
+
+// ======================================================
+// -------- READ SETTINGS FROM FIREBASE --------
+// ======================================================
+void readFirebaseSettings() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[FB] Skipping poll — WiFi not connected.");
+    firebaseConnected = false;
+    return;
+  }
+
+  Serial.println("\n[FB] ---- Polling Firebase for latest settings... ----");
+
+  String threshStr = firebaseGet("settings/threshold_db");
+  if (threshStr == "") {
+    Serial.println("[FB] ERROR — no response for threshold_db.");
+    firebaseConnected = false;
+    return;
+  }
+  float newThreshold = threshStr.toFloat();
+
+  String durStr = firebaseGet("settings/alarm_duration_ms");
+  if (durStr == "") {
+    Serial.println("[FB] ERROR — no response for alarm_duration_ms.");
+    firebaseConnected = false;
+    return;
+  }
+  unsigned long newDuration = (unsigned long)durStr.toInt();
+
+  firebaseConnected = true;
+  bool anyChanged = false;
+
+  if (newThreshold != lastThresholdDB) {
+    float oldVal    = thresholdDB;
+    thresholdDB     = constrain(newThreshold, 0.0f, 119.0f);
+    lastThresholdDB = thresholdDB;
+    anyChanged      = true;
+    Serial.println("----------------------------------------");
+    Serial.println("[SETTINGS] Noise threshold updated!");
+    Serial.print("           Previous : "); Serial.print(oldVal, 1);      Serial.println(" dB");
+    Serial.print("           New      : "); Serial.print(thresholdDB, 1); Serial.println(" dB");
+    Serial.println("----------------------------------------");
+  }
+
+  if (newDuration != lastAlarmDurationMs) {
+    unsigned long oldDur = alarmDurationMs;
+    alarmDurationMs      = newDuration;
+    lastAlarmDurationMs  = alarmDurationMs;
+    anyChanged           = true;
+    Serial.println("----------------------------------------");
+    Serial.println("[SETTINGS] Alarm duration updated!");
+    Serial.print("           Previous : "); Serial.print(oldDur / 1000UL);          Serial.println(" seconds");
+    Serial.print("           New      : "); Serial.print(alarmDurationMs / 1000UL); Serial.println(" seconds");
+    Serial.println("----------------------------------------");
+  }
+
+  if (anyChanged) {
+    loudAccumMs         = 0UL;
+    softCooldownStartMs = 0UL;
+    alarmState          = STATE_QUIET;
+    lastLoopTime        = millis();
+    Serial.println("[SETTINGS] State reset with new settings applied.");
+    Serial.println("[FB] ---- Poll complete (settings changed) ----\n");
+  } else {
+    Serial.println("[FB] No changes detected. Settings unchanged.");
+    Serial.println("[FB] ---- Poll complete ----\n");
+  }
+}
+
+
+// ======================================================
+// -------- SETUP --------
+// ======================================================
+void setup() {
+  Serial.begin(115200);
+  delay(2000);
+  Serial2.begin(9600, SERIAL_8N1, DF_RX, DF_TX);
+
+  pinMode(soundAO, INPUT);
+  for (int i = 0; i < 4; i++) {
+    pinMode(ledQuiet[i], OUTPUT);
+    pinMode(ledLoud[i], OUTPUT);
+  }
+
+  analogSetAttenuation(ADC_11db);
+  randomSeed(analogRead(36));
+
+  Serial.println("\n========================================");
+  Serial.println("  SoundCheck (E-Sense) Initializing...");
+  Serial.println("========================================\n");
+
+  // -------- DFPlayer Initialization --------
+  Serial.println("[INIT] Starting DFPlayer Mini...");
+  if (!myDFPlayer.begin(Serial2)) {
+    Serial.println("[WARN] DFPlayer FAILED — continuing without audio.");
+    Serial.println("       Check: SD card in slot, TX->RX crossed, 1K resistor on TX line.");
+    dfPlayerReady = false;
+  } else {
+    myDFPlayer.volume(20); //VOLUME OF SPEAKER BRUH
+    delay(2000);
+
+    Serial.println("[INIT] Probing for MP3 tracks...");
+    totalTracks = 0;
+    int missCount = 0;
+
+    for (int i = 1; i <= MAX_TRACKS_PROBE; i++) {
+      myDFPlayer.playMp3Folder(i);
+
+      unsigned long probeWait = millis();
+      bool gotResponse = false;
+      while (millis() - probeWait < 500) {
+        if (myDFPlayer.available()) { gotResponse = true; break; }
+        delay(20);
+      }
+
+      if (gotResponse) {
+        uint8_t msgType = myDFPlayer.readType();
+        if (msgType == DFPlayerError) {
+          Serial.print("[INIT] Track ");
+          Serial.print(i);
+          Serial.println(" — error response, stopping probe.");
+          myDFPlayer.stop();
+          break;
+        }
+        Serial.print("[INIT] Track ");
+        Serial.print(i);
+        Serial.println(" found.");
+        totalTracks = i;
+        missCount = 0;
+      } else {
+        missCount++;
+        Serial.print("[INIT] Track ");
+        Serial.print(i);
+        Serial.print(" — no response (miss ");
+        Serial.print(missCount);
+        Serial.print("/");
+        Serial.print(PROBE_MISS_LIMIT);
+        Serial.println(").");
+        if (missCount >= PROBE_MISS_LIMIT) {
+          Serial.println("[INIT] Miss limit reached — stopping probe.");
+          myDFPlayer.stop();
+          break;
+        }
+      }
+
+      myDFPlayer.stop();
+      delay(150);
+    }
+
+    Serial.println("[INIT] Draining DFPlayer buffer post-probe...");
+    drainDFPlayerBuffer();
+
+    myDFPlayer.volume(20);
+    delay(500);
+
+    dfPlayerReady = (totalTracks > 0);
+    Serial.print("[INIT] DFPlayer ready. Found ");
+    Serial.print(totalTracks);
+    Serial.println(" track(s).");
+
+    if (!dfPlayerReady) {
+      Serial.println("[WARN] No tracks found. Ensure files are named 0001.mp3 etc. inside the 'mp3' folder.");
+    }
+  }
+
+  // -------- WiFi Initialization --------
+  Serial.print("\n[INIT] Connecting to WiFi: ");
+  Serial.println(WIFI_SSID);
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+  int wifiAttempts = 0;
+  while (WiFi.status() != WL_CONNECTED && wifiAttempts < 20) {
+    delay(500);
+    Serial.print(".");
+    wifiAttempts++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n[INIT] WiFi Connected!");
+    Serial.print("[INIT] IP Address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\n[WARN] WiFi connection failed. Running on default settings.");
+  }
+
+  // -------- Initial Firebase Read --------
+  if (WiFi.status() == WL_CONNECTED) {
+    readFirebaseSettings();
+  } else {
+    Serial.println("[INIT] Skipping Firebase read — no WiFi.");
+  }
+  lastFirebasePoll = millis();
+
+  // ======================================================
+  // -------- TEST TRACK PLAYER --------
+  // Uncomment #define TEST_TRACK at the top of the file
+  // and set the number to the track you want to test.
+  // This block is compiled out completely when TEST_TRACK
+  // is not defined — zero effect on normal operation.
+  // ======================================================
+#ifdef TEST_TRACK
+  Serial.println("\n========================================");
+  Serial.println("  TEST MODE — monitoring DISABLED");
+  Serial.println("========================================");
+
+  if (!dfPlayerReady) {
+    Serial.println("[TEST] Aborted — DFPlayer not ready.");
+  } else if (TEST_TRACK < 1 || TEST_TRACK > totalTracks) {
+    Serial.print("[TEST] Aborted — track ");
+    Serial.print(TEST_TRACK);
+    Serial.print(" out of range. SD card has tracks 1 to ");
+    Serial.println(totalTracks);
+  } else {
+    Serial.print("[TEST] Playing track ");
+    Serial.print(TEST_TRACK);
+    Serial.print(" (000");
+    Serial.print(TEST_TRACK);
+    Serial.println(".mp3)...");
+
+    myDFPlayer.playMp3Folder(TEST_TRACK);
+    unsigned long testStart = millis();
+    bool finished = false;
+
+    // Wait up to 60 seconds for the track to finish
+    while (millis() - testStart < 60000UL) {
+      if (myDFPlayer.available()) {
+        if (myDFPlayer.readType() == DFPlayerPlayFinished) {
+          finished = true;
+          break;
+        }
+      }
+      delay(50);
+    }
+
+    if (finished) {
+      Serial.print("[TEST] Done. Track played for ");
+      Serial.print((millis() - testStart) / 1000UL);
+      Serial.println("s — audio confirmed working.");
+    } else {
+      Serial.println("[TEST] Timed out — PlayFinished never received after 60s.");
+      Serial.println("[TEST] Audio may have still played. Check:");
+      Serial.println("       - File encoding: 16000Hz mono 32kbps MP3");
+      Serial.println("       - SD card reformatted (no ghost files)");
+      Serial.println("       - Wiring: DAC_R -> PAM8403 IN, shared GND");
+    }
+  }
+
+  Serial.println("\n[TEST] Halted. To resume normal operation:");
+  Serial.println("       Comment out #define TEST_TRACK and reflash.");
+  while (true) { delay(1000); }  // Halt — loop() never runs in test mode
+#endif
+
+  // -------- Microphone Baseline Calibration --------
+  Serial.println("\n[INIT] Calibrating microphone (3 seconds)...");
+  unsigned long calibStart = millis();
+  while (millis() - calibStart < 3000) {
+    int sigMax = 0, sigMin = 4095;
+    unsigned long t = millis();
+    while (millis() - t < 40) {
+      int s = analogRead(soundAO);
+      sigMax = max(sigMax, s);
+      sigMin = min(sigMin, s);
+    }
+    updateSmoothedDB(convertToDB(sigMax, sigMin));
+    delay(60);
+  }
+  Serial.print("[INIT] Calibration complete. Baseline dB=");
+  Serial.println(smoothDB, 1);
+  Serial.println("\n[INIT] SoundCheck is now monitoring.\n");
+
+  lastLoopTime = millis();
+}
+
+
+// ======================================================
+// -------- MAIN LOOP --------
+// ======================================================
+void loop() {
+
+  // -------- MEASURE SOUND --------
+  int signalMax = 0;
+  int signalMin = 4095;
+  unsigned long startTime = millis();
+
+  while (millis() - startTime < 40) {
+    int s = analogRead(soundAO);
+    signalMax = max(signalMax, s);
+    signalMin = min(signalMin, s);
+  }
+
+  float newDB = convertToDB(signalMax, signalMin);
+  updateSmoothedDB(newDB);
+
+  // -------- ACCURATE DELTA TIME --------
+  unsigned long now     = millis();
+  unsigned long deltaMs = now - lastLoopTime;
+  if (deltaMs > DELTA_MS_CAP) deltaMs = DELTA_MS_CAP;
+  lastLoopTime = now;
+
+  // -------- FIREBASE POLLING --------
+  if (now - lastFirebasePoll >= FIREBASE_POLL_MS) {
+    readFirebaseSettings();
+    lastFirebasePoll = millis();
+    lastLoopTime     = millis();
+  }
+
+  // -------- SOFT COOLDOWN EXPIRY CHECK --------
+  if (softCooldownStartMs > 0) {
+    if (now - softCooldownStartMs >= SOFT_COOLDOWN_DURATION) {
+      softCooldownStartMs = 0UL;
+      loudAccumMs         = 0UL;
+      alarmState          = STATE_QUIET;
+      Serial.println("[COOLDOWN] Soft cooldown expired — loud accumulator reset.");
+    }
+  }
+
+  // -------- STATE MACHINE --------
+  if (smoothDB < thresholdDB) {
+    if (alarmState != STATE_QUIET && softCooldownStartMs == 0) {
+      softCooldownStartMs = now;
+      Serial.print("[COOLDOWN] Sound dropped below threshold. Soft cooldown started (");
+      Serial.print(SOFT_COOLDOWN_DURATION / 1000);
+      Serial.println("s).");
+    }
+
+    for (int i = 0; i < 4; i++) {
+      digitalWrite(ledQuiet[i], HIGH);
+      digitalWrite(ledLoud[i], LOW);
+    }
+
+  } else {
+    if (softCooldownStartMs > 0) {
+      Serial.println("[COOLDOWN] Noise returned during cooldown — cooldown cancelled, resuming accumulation.");
+      softCooldownStartMs = 0UL;
+    }
+
+    if (alarmState == STATE_QUIET) {
+      alarmState = STATE_RISING;
+    }
+
+    loudAccumMs += deltaMs;
+
+    if (now - lastSecondMark >= 1000) {
+      totalLoudSeconds++;
+      lastSecondMark = now;
+    }
+
+    if (loudAccumMs >= alarmDurationMs && alarmState != STATE_ALARMING) {
+      alarmState = STATE_ALARMING;
+
+      if (dfPlayerReady && !isAudioPlaying) {
+        int track = random(1, totalTracks + 1);
+        myDFPlayer.playMp3Folder(track);
+        isAudioPlaying = true;
+        audioStartMs   = now;
+        currentTrack   = track;
+
+        Serial.println("========================================");
+        Serial.print("[ALARM] FIRED at runtime=");
+        Serial.print(now / 1000);
+        Serial.print("s | dB=");
+        Serial.print(smoothDB, 1);
+        Serial.print(" | Playing track ");
+        Serial.print(track);
+        Serial.print("/");
+        Serial.println(totalTracks);
+        Serial.println("========================================");
+
+      } else if (!dfPlayerReady) {
+        Serial.println("[ALARM] FIRED but DFPlayer is not available.");
+      } else if (isAudioPlaying) {
+        Serial.print("[ALARM] FIRED but track ");
+        Serial.print(currentTrack);
+        Serial.print(" still playing (");
+        Serial.print((now - audioStartMs) / 1000UL);
+        Serial.println("s elapsed) — skipping this trigger.");
+      }
+
+      loudAccumMs = 0UL;
+    }
+
+    for (int i = 0; i < 4; i++) {
+      digitalWrite(ledQuiet[i], HIGH);
+      digitalWrite(ledLoud[i], HIGH);
+    }
+  }
+
+  // -------- POLL FOR AUDIO COMPLETION --------
+  if (isAudioPlaying) {
+    bool trackFinished = false;
+
+    while (myDFPlayer.available()) {
+      uint8_t msgType = myDFPlayer.readType();
+      if (msgType == DFPlayerPlayFinished) {
+        trackFinished = true;
+      }
+    }
+
+    unsigned long elapsed = now - audioStartMs;
+
+    if (trackFinished) {
+      Serial.print("[MP3] Track ");
+      Serial.print(currentTrack);
+      Serial.print(" finished. Playback duration: ");
+      Serial.print(elapsed / 1000UL);
+      Serial.println("s");
+      isAudioPlaying = false;
+      audioStartMs   = 0UL;
+      currentTrack   = 0;
+      alarmState     = (smoothDB >= thresholdDB) ? STATE_RISING : STATE_QUIET;
+
+    } else if (elapsed >= AUDIO_PLAY_TIMEOUT_MS) {
+      Serial.print("[MP3] TIMEOUT — track ");
+      Serial.print(currentTrack);
+      Serial.print(" never sent PlayFinished after ");
+      Serial.print(elapsed / 1000UL);
+      Serial.println("s. Force-resetting audio state.");
+      Serial.println("[MP3] If this repeats every alarm, check SD card seating and wiring.");
+      isAudioPlaying = false;
+      audioStartMs   = 0UL;
+      currentTrack   = 0;
+      alarmState     = (smoothDB >= thresholdDB) ? STATE_RISING : STATE_QUIET;
+    }
+  }
+
+  // -------- DETERMINE STATUS STRINGS FOR LOG --------
+  const char* alarmStatusStr;
+  if      (isAudioPlaying)               alarmStatusStr = "PLAYING";
+  else if (alarmState == STATE_ALARMING) alarmStatusStr = "TRIGGERED";
+  else                                   alarmStatusStr = "IDLE";
+
+  const char* stateStr = (alarmState == STATE_QUIET)  ? "QUIET"  :
+                         (alarmState == STATE_RISING)  ? "RISING" : "LOUD";
+
+  logStatus(stateStr, alarmStatusStr);
+
+  delay(60);
+}

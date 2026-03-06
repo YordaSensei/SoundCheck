@@ -112,4 +112,18 @@ class CircularSliderView @JvmOverloads constructor(
         val size = MeasureSpec.getSize(widthMeasureSpec).coerceAtLeast(300)
         setMeasuredDimension(size, size)
     }
+
+    // -------- CONVENIENCE METHODS --------
+    fun setRange(min: Int, max: Int) {
+        minValue = min
+        maxValue = max
+    }
+
+    fun getValue(): Int {
+        return progress
+    }
+
+    fun setValue(value: Int) {
+        progress = value.coerceIn(minValue, maxValue)
+    }
 }
