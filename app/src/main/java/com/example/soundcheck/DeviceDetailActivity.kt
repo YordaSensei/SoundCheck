@@ -1,15 +1,28 @@
 package com.example.soundcheck
 
+import android.animation.ArgbEvaluator
+import android.animation.ValueAnimator
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import android.view.animation.DecelerateInterpolator
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
+import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.ValueEventListener
 
+data class LogEntry(
+    var db: Float = 0f,
+    var time: String = "",
+    var date: String = ""
+)
 class DeviceDetailActivity : AppCompatActivity() {
-
     companion object {
         private const val TAG = "SoundCheck_FB"
     }
@@ -22,6 +35,12 @@ class DeviceDetailActivity : AppCompatActivity() {
         val deviceRoom = intent.getStringExtra("device_room") ?: "Room"
 
         // -------- SETUP VIEW REFERENCES --------
+        val toggleGroup = findViewById<MaterialButtonToggleGroup>(R.id.toggleGroup)
+        val controlContainer = findViewById<ConstraintLayout>(R.id.controlContainer)
+        val logHistoryContainer = findViewById<LinearLayout>(R.id.logHistoryContainer)
+        val btnControl = findViewById<Button>(R.id.btnControlPanel)
+        val btnLog = findViewById<Button>(R.id.btnLogHistory)
+
         findViewById<TextView>(R.id.detailDeviceName).text = deviceName
         findViewById<TextView>(R.id.detailDeviceRoom).text = deviceRoom
         findViewById<ImageButton>(R.id.btnBack).setOnClickListener { finish() }
@@ -38,7 +57,52 @@ class DeviceDetailActivity : AppCompatActivity() {
         val btnDuration       = findViewById<LinearLayout>(R.id.btnDuration)
         val btnSaveSettings   = findViewById<Button>(R.id.btnSaveSettings)
 
-        // -------- INITIALIZE CIRCULAR SLIDER --------
+        // -------- TAB TOGGLE --------
+        fun selectTab(selectedBtn: Button, unselectedBtn: Button) {
+            ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 250
+                interpolator = DecelerateInterpolator()
+                addUpdateListener {
+                    val fraction = it.animatedFraction
+
+                    // Use backgroundTintList instead of setting background directly
+                    selectedBtn.backgroundTintList = ColorStateList.valueOf(
+                        ArgbEvaluator().evaluate(fraction, Color.TRANSPARENT, Color.WHITE) as Int
+                    )
+                    unselectedBtn.backgroundTintList = ColorStateList.valueOf(
+                        ArgbEvaluator().evaluate(fraction, Color.WHITE, Color.TRANSPARENT) as Int
+                    )
+
+                    selectedBtn.setTextColor(
+                        ArgbEvaluator().evaluate(fraction, Color.WHITE, Color.parseColor("#8B00FF")) as Int
+                    )
+                    unselectedBtn.setTextColor(
+                        ArgbEvaluator().evaluate(fraction, Color.parseColor("#8B00FF"), Color.WHITE) as Int
+                    )
+                }
+            }.start()
+        }
+
+        selectTab(btnControl, btnLog)
+
+        toggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (isChecked) {
+                when (checkedId) {
+                    R.id.btnControlPanel -> {
+                        selectTab(btnControl, btnLog)
+                        controlContainer.visibility = View.VISIBLE
+                        logHistoryContainer.visibility = View.GONE
+                    }
+                    R.id.btnLogHistory -> {
+                        selectTab(btnLog, btnControl)
+                        controlContainer.visibility = View.GONE
+                        logHistoryContainer.visibility = View.VISIBLE
+                    }
+                }
+            }
+        }
+
+        // -------- CIRCULAR SLIDER --------
         slider.setRange(0, 119)
         slider.setValue(30)       // Default: 30 dB
         tvDbValue.text = "30"
@@ -104,6 +168,7 @@ class DeviceDetailActivity : AppCompatActivity() {
         // Specify the database URL explicitly to ensure correct region (asia-southeast1)
         val database    = FirebaseDatabase.getInstance("https://soundcheck-db-default-rtdb.asia-southeast1.firebasedatabase.app")
         val settingsRef = database.getReference("settings")
+        val logsRef = database.getReference("logs")
 
         // -------- FIREBASE READ ON ACTIVITY START --------
         Log.d(TAG, "Reading settings from Firebase...")
@@ -162,5 +227,42 @@ class DeviceDetailActivity : AppCompatActivity() {
                     Log.e(TAG, "Save FAILED: ${e.message}")
                 }
         }
+
+        fun loadLogs() {
+
+            Log.d(TAG, "Reading logs from Firebase...")
+
+            logsRef.addValueEventListener(object : ValueEventListener {
+
+                override fun onDataChange(snapshot: DataSnapshot) {
+
+                    logHistoryContainer.removeAllViews()
+
+                    val logs = snapshot.children.toList().reversed()
+
+                    for (logSnap in logs) {
+
+                        val log = logSnap.getValue(LogEntry::class.java)
+
+                        if (log != null) {
+
+                            val logText = TextView(this@DeviceDetailActivity)
+
+                            logText.text = String.format("%.1f dB • %s • %s", log.db, log.date, log.time)
+                            logText.textSize = 16f
+                            logText.setPadding(16,16,16,16)
+
+                            logHistoryContainer.addView(logText)
+                        }
+                    }
+                }
+
+                override fun onCancelled(error: DatabaseError) {
+                    Log.e(TAG, "Failed to read logs: ${error.message}")
+                }
+            })
+        }
+
+        loadLogs()
     }
 }
