@@ -11,8 +11,14 @@ import android.view.animation.DecelerateInterpolator
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.firebase.database.*
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
 
 data class LogEntry(
     var db: Float = 0f,
@@ -49,17 +55,25 @@ class DeviceDetailActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.detailDeviceRoom).text = deviceRoom
         findViewById<ImageButton>(R.id.btnBack).setOnClickListener { finish() }
 
-        val slider            = findViewById<CircularSliderView>(R.id.circularSlider)
-        val tvDbValue         = findViewById<TextView>(R.id.tvDbValue)
-        val pickerHours       = findViewById<NumberPicker>(R.id.pickerHours)
-        val pickerMinutes     = findViewById<NumberPicker>(R.id.pickerMinutes)
-        val pickerSeconds     = findViewById<NumberPicker>(R.id.pickerSeconds)
+        val slider             = findViewById<CircularSliderView>(R.id.circularSlider)
+        val tvDbValue          = findViewById<TextView>(R.id.tvDbValue)
+        val pickerHours        = findViewById<NumberPicker>(R.id.pickerHours)
+        val pickerMinutes      = findViewById<NumberPicker>(R.id.pickerMinutes)
+        val pickerSeconds      = findViewById<NumberPicker>(R.id.pickerSeconds)
         val tvSelectedDuration = findViewById<TextView>(R.id.tvSelectedDuration)
-        val noiseLimitView    = findViewById<ConstraintLayout>(R.id.noiseLimitView)
-        val durationView      = findViewById<ConstraintLayout>(R.id.durationView)
-        val btnNoiseLimit     = findViewById<LinearLayout>(R.id.btnNoiseLimit)
-        val btnDuration       = findViewById<LinearLayout>(R.id.btnDuration)
-        val btnSaveSettings   = findViewById<Button>(R.id.btnSaveSettings)
+        val noiseLimitView     = findViewById<ConstraintLayout>(R.id.noiseLimitView)
+        val durationView       = findViewById<ConstraintLayout>(R.id.durationView)
+        val btnNoiseLimit      = findViewById<LinearLayout>(R.id.btnNoiseLimit)
+        val btnDuration        = findViewById<LinearLayout>(R.id.btnDuration)
+        val btnSaveSettings    = findViewById<Button>(R.id.btnSaveSettings)
+
+        // -------- LOG SETUP --------
+        val logRecyclerView = findViewById<RecyclerView>(R.id.logRecyclerView)
+        val tvEmptyLogs     = findViewById<TextView>(R.id.tvEmptyLogs)
+        val logAdapter      = LogAdapter(mutableListOf())
+
+        logRecyclerView.layoutManager = LinearLayoutManager(this)
+        logRecyclerView.adapter = logAdapter
 
         // -------- TAB TOGGLE --------
         fun selectTab(selectedBtn: Button, unselectedBtn: Button) {
@@ -101,19 +115,15 @@ class DeviceDetailActivity : AppCompatActivity() {
         toggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
             if (isChecked) {
                 when (checkedId) {
-
                     R.id.btnControlPanel -> {
                         selectTab(btnControl, btnLog)
                         controlContainer.visibility = View.VISIBLE
                         logHistoryContainer.visibility = View.GONE
                     }
-
                     R.id.btnLogHistory -> {
                         selectTab(btnLog, btnControl)
                         controlContainer.visibility = View.GONE
                         logHistoryContainer.visibility = View.VISIBLE
-
-                        loadLogs()
                     }
                 }
             }
@@ -121,7 +131,7 @@ class DeviceDetailActivity : AppCompatActivity() {
 
         // -------- CIRCULAR SLIDER --------
         slider.setRange(0, 119)
-        slider.setValue(30)
+        slider.setValue(30)       // Default: 30 dB
         tvDbValue.text = "30"
 
         slider.onProgressChanged = { value ->
@@ -132,15 +142,17 @@ class DeviceDetailActivity : AppCompatActivity() {
         pickerHours.minValue = 0
         pickerHours.maxValue = 23
         pickerHours.setFormatter { String.format("%02d", it) }
+        pickerHours.value = 0
 
         pickerMinutes.minValue = 0
         pickerMinutes.maxValue = 59
         pickerMinutes.setFormatter { String.format("%02d", it) }
+        pickerMinutes.value = 0
 
         pickerSeconds.minValue = 0
         pickerSeconds.maxValue = 59
         pickerSeconds.setFormatter { String.format("%02d", it) }
-        pickerSeconds.value = 10
+        pickerSeconds.value = 10  // Default: 10 seconds
 
         // -------- UPDATE DURATION DISPLAY --------
         val updateDurationDisplay = {
@@ -154,35 +166,34 @@ class DeviceDetailActivity : AppCompatActivity() {
 
         updateDurationDisplay()
 
-        pickerHours.setOnValueChangedListener { _, _, _ -> updateDurationDisplay() }
+        pickerHours.setOnValueChangedListener   { _, _, _ -> updateDurationDisplay() }
         pickerMinutes.setOnValueChangedListener { _, _, _ -> updateDurationDisplay() }
         pickerSeconds.setOnValueChangedListener { _, _, _ -> updateDurationDisplay() }
 
-        // -------- TAB TOGGLE --------
+        // -------- CONTROL PANEL TAB TOGGLE --------
         fun selectNoiseLimit() {
             noiseLimitView.visibility = View.VISIBLE
-            durationView.visibility = View.GONE
+            durationView.visibility   = View.GONE
             btnNoiseLimit.alpha = 1f
-            btnDuration.alpha = 0.5f
+            btnDuration.alpha   = 0.5f
         }
 
         fun selectDuration() {
             noiseLimitView.visibility = View.GONE
-            durationView.visibility = View.VISIBLE
+            durationView.visibility   = View.VISIBLE
             btnNoiseLimit.alpha = 0.5f
-            btnDuration.alpha = 1f
+            btnDuration.alpha   = 1f
         }
 
+        // Default tab matches XML visibility="visible" on durationView
         selectDuration()
 
         btnNoiseLimit.setOnClickListener { selectNoiseLimit() }
-        btnDuration.setOnClickListener { selectDuration() }
+        btnDuration.setOnClickListener   { selectDuration() }
 
         // -------- FIREBASE INSTANCE --------
-        val database = FirebaseDatabase.getInstance(
-            "https://soundcheck-db-default-rtdb.asia-southeast1.firebasedatabase.app"
-        )
-
+        // Specify the database URL explicitly to ensure correct region (asia-southeast1)
+        val database    = FirebaseDatabase.getInstance("https://soundcheck-db-default-rtdb.asia-southeast1.firebasedatabase.app")
         val settingsRef = database.getReference("settings")
         logsRef = database.getReference("logs")
 
@@ -191,72 +202,78 @@ class DeviceDetailActivity : AppCompatActivity() {
 
         settingsRef.get()
             .addOnSuccessListener { snapshot ->
-
                 val thresholdDb = when (val value = snapshot.child("threshold_db").getValue()) {
                     is Number -> value.toInt()
                     is String -> value.toIntOrNull() ?: 30
                     else -> 30
                 }
-
                 val alarmMs = when (val value = snapshot.child("alarm_duration_ms").getValue()) {
                     is Number -> value.toLong()
                     is String -> value.toLongOrNull() ?: 10000L
                     else -> 10000L
                 }
 
+                Log.d(TAG, "Settings loaded → threshold_db=$thresholdDb | alarm_duration_ms=$alarmMs")
+
+                // Populate slider
                 slider.setValue(thresholdDb)
                 tvDbValue.text = thresholdDb.toString()
 
+                // Populate pickers from milliseconds
                 val totalSeconds = (alarmMs / 1000L).toInt()
-
-                pickerHours.value = totalSeconds / 3600
+                pickerHours.value   = totalSeconds / 3600
                 pickerMinutes.value = (totalSeconds % 3600) / 60
                 pickerSeconds.value = totalSeconds % 60
 
                 updateDurationDisplay()
             }
-    }
+            .addOnFailureListener { e ->
+                Log.e(TAG, "Failed to load settings: ${e.message}")
+            }
 
-    // -------- LOAD LOGS FUNCTION --------
-    private fun loadLogs() {
+        // -------- FIREBASE WRITE ON SAVE --------
+        btnSaveSettings.setOnClickListener {
+            val thresholdDb     = slider.getValue()
+            val h               = pickerHours.value
+            val m               = pickerMinutes.value
+            val s               = pickerSeconds.value
+            val alarmDurationMs = ((h * 3600L) + (m * 60L) + s) * 1000L
 
-        Log.d(TAG, "Reading logs from Firebase...")
+            Log.d(TAG, "Saving → threshold_db=$thresholdDb | alarm_duration_ms=$alarmDurationMs")
 
-        logsRef.limitToLast(50)
-            .addValueEventListener(object : ValueEventListener {
+            val updates = mapOf(
+                "settings/threshold_db"      to thresholdDb,
+                "settings/alarm_duration_ms" to alarmDurationMs
+            )
 
+            database.reference.updateChildren(updates)
+                .addOnSuccessListener {
+                    Log.d(TAG, "Save successful! threshold_db=$thresholdDb | alarm_duration_ms=$alarmDurationMs")
+                }
+                .addOnFailureListener { e ->
+                    Log.e(TAG, "Save FAILED: ${e.message}")
+                }
+        }
+
+        // -------- FIREBASE READ LOGS --------
+        fun loadLogs() {
+            Log.d(TAG, "Reading logs from Firebase...")
+
+            logsRef.addValueEventListener(object : ValueEventListener {
                 override fun onDataChange(snapshot: DataSnapshot) {
+                    val logs = snapshot.children
+                        .mapNotNull { it.getValue(LogEntry::class.java) }
+                        .reversed()
 
-                    logHistoryContainer.removeAllViews()
+                    Log.d(TAG, "Logs loaded: ${logs.size} entries")
 
-                    val logs = snapshot.children.reversed()
-
-                    for (logSnap in logs) {
-
-                        try {
-
-                            val log = logSnap.getValue(LogEntry::class.java)
-
-                            if (log != null) {
-
-                                val logText = TextView(this@DeviceDetailActivity)
-
-                                logText.text = String.format(
-                                    "%.1f dB • %s • %s",
-                                    log.db,
-                                    log.date,
-                                    log.time
-                                )
-
-                                logText.textSize = 16f
-                                logText.setPadding(16,16,16,16)
-
-                                logHistoryContainer.addView(logText)
-                            }
-
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Error parsing log: ${e.message}")
-                        }
+                    if (logs.isEmpty()) {
+                        tvEmptyLogs.visibility     = View.VISIBLE
+                        logRecyclerView.visibility = View.GONE
+                    } else {
+                        tvEmptyLogs.visibility     = View.GONE
+                        logRecyclerView.visibility = View.VISIBLE
+                        logAdapter.updateLogs(logs)
                     }
                 }
 
@@ -264,5 +281,8 @@ class DeviceDetailActivity : AppCompatActivity() {
                     Log.e(TAG, "Failed to read logs: ${error.message}")
                 }
             })
+        }
+
+        loadLogs()
     }
 }

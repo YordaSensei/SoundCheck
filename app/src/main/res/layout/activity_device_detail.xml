@@ -81,89 +81,89 @@
 
     </com.google.android.material.button.MaterialButtonToggleGroup>
 
-    <!-- ===== NOISE LIMIT VIEW ===== -->
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/noiseLimitView"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_marginBottom="32dp"
-        android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@+id/buttonRow"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/detailDeviceName">
-
-        <com.example.soundcheck.CircularSliderView
-            android:id="@+id/circularSlider"
-            android:layout_width="280dp"
-            android:layout_height="280dp"
-            android:layout_marginTop="32dp"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
-
-        <TextView
-            android:id="@+id/tvDbValue"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:fontFamily="@font/poppins_bold"
-            android:text="30"
-            android:textColor="@color/white"
-            android:textSize="60sp"
-            app:layout_constraintBottom_toBottomOf="@+id/circularSlider"
-            app:layout_constraintEnd_toEndOf="@+id/circularSlider"
-            app:layout_constraintStart_toStartOf="@+id/circularSlider"
-            app:layout_constraintTop_toTopOf="@+id/circularSlider"
-            app:layout_constraintVertical_bias="0.45" />
-
-        <TextView
-            android:id="@+id/tvDbUnit"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="4dp"
-            android:layout_marginBottom="24dp"
-            android:fontFamily="@font/poppins"
-            android:text="db"
-            android:textColor="@color/white"
-            android:textSize="18sp"
-            app:layout_constraintBottom_toBottomOf="@+id/tvDbValue"
-            app:layout_constraintStart_toEndOf="@+id/tvDbValue" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="24dp"
-            android:fontFamily="@font/poppins"
-            android:text="Min"
-            android:textColor="@color/white"
-            android:textSize="16sp"
-            app:layout_constraintBottom_toBottomOf="@+id/circularSlider"
-            app:layout_constraintStart_toStartOf="@+id/circularSlider"
-            app:layout_constraintTop_toBottomOf="@+id/circularSlider" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="24dp"
-            android:fontFamily="@font/poppins"
-            android:text="Max"
-            android:textColor="@color/white"
-            android:textSize="16sp"
-            app:layout_constraintBottom_toBottomOf="@+id/circularSlider"
-            app:layout_constraintEnd_toEndOf="@+id/circularSlider"
-            app:layout_constraintTop_toBottomOf="@+id/circularSlider" />
-
-    </androidx.constraintlayout.widget.ConstraintLayout>
-
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/controlContainer"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:visibility="visible"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/detailDeviceName">
+
+        <!-- ===== NOISE LIMIT VIEW ===== -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/noiseLimitView"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginTop="80dp"
+            android:visibility="visible"
+            app:layout_constraintBottom_toTopOf="@+id/buttonRow"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <com.example.soundcheck.CircularSliderView
+                android:id="@+id/circularSlider"
+                android:layout_width="280dp"
+                android:layout_height="280dp"
+                android:layout_marginTop="32dp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
+                android:id="@+id/tvDbValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_bold"
+                android:text="30"
+                android:textColor="@color/white"
+                android:textSize="60sp"
+                app:layout_constraintBottom_toBottomOf="@+id/circularSlider"
+                app:layout_constraintEnd_toEndOf="@+id/circularSlider"
+                app:layout_constraintStart_toStartOf="@+id/circularSlider"
+                app:layout_constraintTop_toTopOf="@+id/circularSlider"
+                app:layout_constraintVertical_bias="0.45" />
+
+            <TextView
+                android:id="@+id/tvDbUnit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_marginBottom="24dp"
+                android:fontFamily="@font/poppins"
+                android:text="db"
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                app:layout_constraintBottom_toBottomOf="@+id/tvDbValue"
+                app:layout_constraintStart_toEndOf="@+id/tvDbValue" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="24dp"
+                android:fontFamily="@font/poppins"
+                android:text="Min"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                app:layout_constraintBottom_toBottomOf="@+id/circularSlider"
+                app:layout_constraintStart_toStartOf="@+id/circularSlider"
+                app:layout_constraintTop_toBottomOf="@+id/circularSlider" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="24dp"
+                android:fontFamily="@font/poppins"
+                android:text="Max"
+                android:textColor="@color/white"
+                android:textSize="16sp"
+                app:layout_constraintBottom_toBottomOf="@+id/circularSlider"
+                app:layout_constraintEnd_toEndOf="@+id/circularSlider"
+                app:layout_constraintTop_toBottomOf="@+id/circularSlider" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
 
         <!-- ===== DURATION VIEW ===== -->
         <androidx.constraintlayout.widget.ConstraintLayout
@@ -172,7 +172,7 @@
             android:layout_height="0dp"
             android:layout_marginTop="94dp"
             android:layout_marginBottom="32dp"
-            android:visibility="visible"
+            android:visibility="gone"
             app:layout_constraintBottom_toTopOf="@+id/buttonRow"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -394,13 +394,14 @@
             app:layout_constraintStart_toStartOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 
+    <!-- LOG CONTAINER -->
     <LinearLayout
         android:id="@+id/logHistoryContainer"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_marginTop="32dp"
         android:orientation="vertical"
-        android:visibility="gone"
+        android:visibility="visible"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -426,10 +427,8 @@
                 android:layout_marginEnd="8dp"
                 android:text="Date"
                 android:textColor="@color/white"
-                app:chipBackgroundColor="@android:color/transparent"
-                app:chipIconTint="@color/white"
-                app:chipStrokeColor="@color/white"
-                app:chipStrokeWidth="1dp" />
+                android:fontFamily="@font/roboto_bold"
+                app:chipBackgroundColor="@color/purple" />
 
             <!-- dB Filter Chip -->
             <com.google.android.material.chip.Chip
@@ -440,10 +439,7 @@
                 android:layout_marginEnd="8dp"
                 android:text="dB Level"
                 android:textColor="@color/white"
-                app:chipBackgroundColor="@android:color/transparent"
-                app:chipIconTint="@color/white"
-                app:chipStrokeColor="@color/white"
-                app:chipStrokeWidth="1dp" />
+                app:chipBackgroundColor="@color/purple" />
 
             <!-- Spacer -->
             <View
@@ -470,6 +466,18 @@
             android:layout_marginEnd="16dp"
             android:background="#33FFFFFF" />
 
+        <TextView
+            android:id="@+id/tvEmptyLogs"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="48dp"
+            android:fontFamily="@font/poppins"
+            android:gravity="center"
+            android:text="No logs yet"
+            android:textColor="#AAFFFFFF"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
         <!-- Log List -->
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/logRecyclerView"
@@ -477,7 +485,8 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:clipToPadding="false"
-            android:paddingTop="4dp" />
+            android:paddingTop="4dp"
+            android:paddingStart="24dp"/>
 
     </LinearLayout>
 
