@@ -85,7 +85,7 @@
         android:id="@+id/controlContainer"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:visibility="gone"
+        android:visibility="visible"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -401,7 +401,7 @@
         android:layout_height="0dp"
         android:layout_marginTop="32dp"
         android:orientation="vertical"
-        android:visibility="visible"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -425,9 +425,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="8dp"
+                android:fontFamily="@font/roboto_bold"
                 android:text="Date"
                 android:textColor="@color/white"
-                android:fontFamily="@font/roboto_bold"
                 app:chipBackgroundColor="@color/purple" />
 
             <!-- dB Filter Chip -->
@@ -485,8 +485,8 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:clipToPadding="false"
-            android:paddingTop="4dp"
-            android:paddingStart="24dp"/>
+            android:paddingStart="24dp"
+            android:paddingTop="4dp" />
 
     </LinearLayout>
 
