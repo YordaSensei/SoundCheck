@@ -35,11 +35,11 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/btnBack" />
 
-    <!-- Noise Limit Item -->
+    <!-- Noise Limit Card -->
     <androidx.cardview.widget.CardView
         android:id="@+id/cardNoiseLimit"
         android:layout_width="0dp"
-        android:layout_height="58dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
         app:cardBackgroundColor="@color/light_background"
         app:cardCornerRadius="14dp"
@@ -48,22 +48,39 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tvTitle">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="center_vertical"
-            android:layout_marginStart="20dp"
-            android:fontFamily="@font/poppins"
-            android:text="Noise Limit"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/tvNoiseLimitTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins"
+                android:text="Noise Limit"
+                android:textColor="@color/black"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/tvNoiseLimitDesc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:fontFamily="@font/poppins"
+                android:text="Set a maximum noise (dB) limit for each device to control acceptable sound levels in an area. When noise stays above the limit for a set time, the system triggers an alarm."
+                android:textColor="@color/black"
+                android:textSize="13sp"
+                android:visibility="gone" />
+        </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- Duration Item -->
+    <!-- Duration Card -->
     <androidx.cardview.widget.CardView
         android:id="@+id/cardDuration"
         android:layout_width="0dp"
-        android:layout_height="58dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
         app:cardBackgroundColor="@color/light_background"
         app:cardCornerRadius="14dp"
@@ -72,22 +89,39 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/cardNoiseLimit">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="center_vertical"
-            android:layout_marginStart="20dp"
-            android:fontFamily="@font/poppins"
-            android:text="Duration"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/tvDurationTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins"
+                android:text="Duration"
+                android:textColor="@color/black"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/tvDurationDesc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:fontFamily="@font/poppins"
+                android:text="Set the duration threshold for how long noise must exceed the limit before an alarm is triggered."
+                android:textColor="@color/black"
+                android:textSize="13sp"
+                android:visibility="gone" />
+        </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <!-- Log Item -->
+    <!-- Log Card -->
     <androidx.cardview.widget.CardView
         android:id="@+id/cardLog"
         android:layout_width="0dp"
-        android:layout_height="58dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
         app:cardBackgroundColor="@color/light_background"
         app:cardCornerRadius="14dp"
@@ -96,15 +130,32 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/cardDuration">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="center_vertical"
-            android:layout_marginStart="20dp"
-            android:fontFamily="@font/poppins"
-            android:text="Log"
-            android:textColor="@color/black"
-            android:textSize="14sp" />
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:id="@+id/tvLogTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins"
+                android:text="Log"
+                android:textColor="@color/black"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/tvLogDesc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:fontFamily="@font/poppins"
+                android:text="View a history of noise events and alarm triggers logged by the system for each monitored device."
+                android:textColor="@color/black"
+                android:textSize="13sp"
+                android:visibility="gone" />
+        </LinearLayout>
     </androidx.cardview.widget.CardView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
