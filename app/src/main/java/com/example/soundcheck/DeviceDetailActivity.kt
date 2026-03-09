@@ -1,24 +1,16 @@
 package com.example.soundcheck
 
-import android.animation.ArgbEvaluator
-import android.animation.ValueAnimator
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.view.View
-import android.view.animation.DecelerateInterpolator
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.firebase.database.*
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
 
 data class LogEntry(
     var db: Float = 0f,
@@ -32,7 +24,6 @@ class DeviceDetailActivity : AppCompatActivity() {
         private const val TAG = "SoundCheck_FB"
     }
 
-    // ----- CLASS LEVEL VARIABLES -----
     private lateinit var logsRef: DatabaseReference
     private lateinit var logHistoryContainer: LinearLayout
 
@@ -44,12 +35,13 @@ class DeviceDetailActivity : AppCompatActivity() {
         val deviceRoom = intent.getStringExtra("device_room") ?: "Room"
 
         // -------- SETUP VIEW REFERENCES --------
-        val toggleGroup = findViewById<MaterialButtonToggleGroup>(R.id.toggleGroup)
-        val controlContainer = findViewById<ConstraintLayout>(R.id.controlContainer)
-        logHistoryContainer = findViewById(R.id.logHistoryContainer)
+        val controlContainer   = findViewById<ConstraintLayout>(R.id.controlContainer)
+        logHistoryContainer    = findViewById(R.id.logHistoryContainer)
 
-        val btnControl = findViewById<Button>(R.id.btnControlPanel)
-        val btnLog = findViewById<Button>(R.id.btnLogHistory)
+        val btnControlPanel    = findViewById<LinearLayout>(R.id.btnControlPanel)
+        val btnLogHistory      = findViewById<LinearLayout>(R.id.btnLogHistory)
+        val controlTxt         = findViewById<TextView>(R.id.controlTxt)
+        val txtLog             = findViewById<TextView>(R.id.txtLog)
 
         findViewById<TextView>(R.id.detailDeviceName).text = deviceName
         findViewById<TextView>(R.id.detailDeviceRoom).text = deviceRoom
@@ -76,62 +68,35 @@ class DeviceDetailActivity : AppCompatActivity() {
         logRecyclerView.adapter = logAdapter
 
         // -------- TAB TOGGLE --------
-        fun selectTab(selectedBtn: Button, unselectedBtn: Button) {
-            ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = 250
-                interpolator = DecelerateInterpolator()
-                addUpdateListener {
-                    val fraction = it.animatedFraction
+        fun selectTab(
+            selectedLayout: LinearLayout, selectedText: TextView,
+            unselectedLayout: LinearLayout, unselectedText: TextView
+        ) {
+            selectedLayout.setBackgroundResource(R.drawable.white_semi_rounded)
+            selectedText.setTextColor(Color.parseColor("#67058A"))
 
-                    selectedBtn.backgroundTintList = ColorStateList.valueOf(
-                        ArgbEvaluator().evaluate(fraction, Color.TRANSPARENT, Color.WHITE) as Int
-                    )
-
-                    unselectedBtn.backgroundTintList = ColorStateList.valueOf(
-                        ArgbEvaluator().evaluate(fraction, Color.WHITE, Color.TRANSPARENT) as Int
-                    )
-
-                    selectedBtn.setTextColor(
-                        ArgbEvaluator().evaluate(
-                            fraction,
-                            Color.WHITE,
-                            Color.parseColor("#8B00FF")
-                        ) as Int
-                    )
-
-                    unselectedBtn.setTextColor(
-                        ArgbEvaluator().evaluate(
-                            fraction,
-                            Color.parseColor("#8B00FF"),
-                            Color.WHITE
-                        ) as Int
-                    )
-                }
-            }.start()
+            unselectedLayout.setBackgroundResource(android.R.color.transparent)
+            unselectedText.setTextColor(Color.WHITE)
         }
 
-        selectTab(btnControl, btnLog)
+        // Default: Control tab selected
+        selectTab(btnControlPanel, controlTxt, btnLogHistory, txtLog)
 
-        toggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (isChecked) {
-                when (checkedId) {
-                    R.id.btnControlPanel -> {
-                        selectTab(btnControl, btnLog)
-                        controlContainer.visibility = View.VISIBLE
-                        logHistoryContainer.visibility = View.GONE
-                    }
-                    R.id.btnLogHistory -> {
-                        selectTab(btnLog, btnControl)
-                        controlContainer.visibility = View.GONE
-                        logHistoryContainer.visibility = View.VISIBLE
-                    }
-                }
-            }
+        btnControlPanel.setOnClickListener {
+            selectTab(btnControlPanel, controlTxt, btnLogHistory, txtLog)
+            controlContainer.visibility    = View.VISIBLE
+            logHistoryContainer.visibility = View.GONE
+        }
+
+        btnLogHistory.setOnClickListener {
+            selectTab(btnLogHistory, txtLog, btnControlPanel, controlTxt)
+            controlContainer.visibility    = View.GONE
+            logHistoryContainer.visibility = View.VISIBLE
         }
 
         // -------- CIRCULAR SLIDER --------
         slider.setRange(0, 119)
-        slider.setValue(30)       // Default: 30 dB
+        slider.setValue(30)
         tvDbValue.text = "30"
 
         slider.onProgressChanged = { value ->
@@ -152,7 +117,7 @@ class DeviceDetailActivity : AppCompatActivity() {
         pickerSeconds.minValue = 0
         pickerSeconds.maxValue = 59
         pickerSeconds.setFormatter { String.format("%02d", it) }
-        pickerSeconds.value = 10  // Default: 10 seconds
+        pickerSeconds.value = 10
 
         // -------- UPDATE DURATION DISPLAY --------
         val updateDurationDisplay = {
@@ -185,19 +150,17 @@ class DeviceDetailActivity : AppCompatActivity() {
             btnDuration.alpha   = 1f
         }
 
-        // Default tab matches XML visibility="visible" on durationView
         selectNoiseLimit()
 
         btnNoiseLimit.setOnClickListener { selectNoiseLimit() }
         btnDuration.setOnClickListener   { selectDuration() }
 
         // -------- FIREBASE INSTANCE --------
-        // Specify the database URL explicitly to ensure correct region (asia-southeast1)
         val database    = FirebaseDatabase.getInstance("https://soundcheck-db-default-rtdb.asia-southeast1.firebasedatabase.app")
         val settingsRef = database.getReference("settings")
-        logsRef = database.getReference("logs")
+        logsRef         = database.getReference("logs")
 
-        // -------- FIREBASE READ ON ACTIVITY START --------
+        // -------- FIREBASE READ SETTINGS --------
         Log.d(TAG, "Reading settings from Firebase...")
 
         settingsRef.get()
@@ -215,11 +178,9 @@ class DeviceDetailActivity : AppCompatActivity() {
 
                 Log.d(TAG, "Settings loaded → threshold_db=$thresholdDb | alarm_duration_ms=$alarmMs")
 
-                // Populate slider
                 slider.setValue(thresholdDb)
                 tvDbValue.text = thresholdDb.toString()
 
-                // Populate pickers from milliseconds
                 val totalSeconds = (alarmMs / 1000L).toInt()
                 pickerHours.value   = totalSeconds / 3600
                 pickerMinutes.value = (totalSeconds % 3600) / 60

@@ -44,42 +44,72 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/detailDeviceRoom" />
 
-    <com.google.android.material.button.MaterialButtonToggleGroup
+    <LinearLayout
         android:id="@+id/toggleGroup"
         android:layout_width="0dp"
-        android:layout_height="60dp"
+        android:layout_height="64dp"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="16dp"
         android:layout_marginEnd="16dp"
-        android:background="@drawable/toggle_background"
-        android:padding="4dp"
+        android:background="@drawable/purple_semi_rounded"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:padding="8dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/detailDeviceName"
-        app:selectionRequired="true"
-        app:singleSelection="true">
+        app:layout_constraintTop_toBottomOf="@+id/detailDeviceName">
 
-        <Button
+        <!-- Control Panel -->
+        <LinearLayout
             android:id="@+id/btnControlPanel"
-            style="@style/ToggleButton"
             android:layout_width="0dp"
             android:layout_height="match_parent"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
             android:layout_weight="1"
-            android:fontFamily="@font/poppins_bold"
-            android:text="Control"
-            android:textSize="18sp" />
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:orientation="vertical">
 
-        <Button
+            <TextView
+                android:id="@+id/controlTxt"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_bold"
+                android:text="Control"
+                android:textColor="@color/white"
+                android:textSize="18sp" />
+
+        </LinearLayout>
+
+        <!-- Devices Button -->
+        <LinearLayout
             android:id="@+id/btnLogHistory"
-            style="@style/ToggleButton"
             android:layout_width="0dp"
             android:layout_height="match_parent"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
             android:layout_weight="1"
-            android:fontFamily="@font/poppins_bold"
-            android:text="Log"
-            android:textSize="18sp" />
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground"
+            android:gravity="center"
+            android:orientation="vertical">
 
-    </com.google.android.material.button.MaterialButtonToggleGroup>
+            <TextView
+                android:id="@+id/txtLog"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/poppins_bold"
+                android:text="Log"
+                android:textColor="@color/white"
+                android:textSize="18sp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/controlContainer"
@@ -321,7 +351,7 @@
                 android:layout_width="120dp"
                 android:layout_height="120dp"
                 android:layout_marginEnd="16dp"
-                android:background="@drawable/toggle_background"
+                android:background="@drawable/purple_slight_rounded"
                 android:clickable="true"
                 android:focusable="true"
                 android:foreground="?attr/selectableItemBackground"
@@ -349,7 +379,7 @@
                 android:id="@+id/btnDuration"
                 android:layout_width="120dp"
                 android:layout_height="120dp"
-                android:background="@drawable/toggle_background"
+                android:background="@drawable/purple_slight_rounded"
                 android:clickable="true"
                 android:focusable="true"
                 android:foreground="?attr/selectableItemBackground"
@@ -406,57 +436,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/toggleGroup">
-
-        <!-- Filter Bar -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="16dp"
-            android:paddingTop="12dp"
-            android:paddingEnd="16dp"
-            android:paddingBottom="8dp">
-
-            <!-- Date Filter Chip -->
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipFilterDate"
-                style="@style/Widget.MaterialComponents.Chip.Filter"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                android:fontFamily="@font/roboto_bold"
-                android:text="Date"
-                android:textColor="@color/white"
-                app:chipBackgroundColor="@color/purple" />
-
-            <!-- dB Filter Chip -->
-            <com.google.android.material.chip.Chip
-                android:id="@+id/chipFilterDb"
-                style="@style/Widget.MaterialComponents.Chip.Filter"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginEnd="8dp"
-                android:text="dB Level"
-                android:textColor="@color/white"
-                app:chipBackgroundColor="@color/purple" />
-
-            <!-- Spacer -->
-            <View
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
-
-            <!-- Sort Button -->
-            <ImageButton
-                android:id="@+id/btnSort"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:background="@android:color/transparent"
-                android:src="@drawable/ic_sort"
-                app:tint="@color/white" />
-
-        </LinearLayout>
 
         <!-- Divider -->
         <View

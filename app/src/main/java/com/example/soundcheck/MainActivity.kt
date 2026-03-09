@@ -1,19 +1,16 @@
 package com.example.soundcheck
 
-import android.animation.ValueAnimator
-import android.animation.ArgbEvaluator
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
-import android.view.animation.DecelerateInterpolator
-import android.widget.Button
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.text.Editable
 import android.text.TextWatcher
+import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.constraintlayout.widget.ConstraintLayout
@@ -21,9 +18,9 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.textfield.TextInputEditText
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.firestore.FirebaseFirestore
 
 class MainActivity : AppCompatActivity() {
@@ -52,10 +49,12 @@ class MainActivity : AppCompatActivity() {
         val navProfile     = findViewById<LinearLayout>(R.id.navProfile)
         val navHomeIcon    = findViewById<ImageView>(R.id.navHomeIcon)
         val navProfileIcon = findViewById<ImageView>(R.id.navProfileIcon)
+        val btnLogout = findViewById<ImageView>(R.id.btnLogout)
 
-        val toggleGroup    = findViewById<MaterialButtonToggleGroup>(R.id.toggleGroup)
-        val btnRooms       = findViewById<Button>(R.id.btnRooms)
-        val btnDevices     = findViewById<Button>(R.id.btnDevices)
+        val btnRooms       = findViewById<LinearLayout>(R.id.btnRooms)
+        val btnDevices     = findViewById<LinearLayout>(R.id.btnDevices)
+        val tvRooms        = findViewById<TextView>(R.id.tvRooms)
+        val tvDevices      = findViewById<TextView>(R.id.tvDevices)
         val roomRecycler   = findViewById<RecyclerView>(R.id.roomRecycler)
         val deviceRecycler = findViewById<RecyclerView>(R.id.deviceRecycler)
 
@@ -63,97 +62,118 @@ class MainActivity : AppCompatActivity() {
         fun showHome() {
             homeTab.visibility    = View.VISIBLE
             profileTab.visibility = View.GONE
-            navHomeIcon.imageTintList    = ColorStateList.valueOf(Color.WHITE)
-            navProfileIcon.imageTintList = ColorStateList.valueOf(Color.parseColor("#8B00FF"))
+            navHome.setBackgroundResource(R.drawable.white_semi_rounded)
+            navHomeIcon.imageTintList = ColorStateList.valueOf(Color.parseColor("#67058A"))
+            navProfile.setBackgroundResource(android.R.color.transparent)
+            navProfileIcon.imageTintList = ColorStateList.valueOf(Color.WHITE)
         }
 
         fun showProfile() {
             homeTab.visibility    = View.GONE
             profileTab.visibility = View.VISIBLE
-            navHomeIcon.imageTintList    = ColorStateList.valueOf(Color.parseColor("#8B00FF"))
-            navProfileIcon.imageTintList = ColorStateList.valueOf(Color.WHITE)
+            navHome.setBackgroundResource(android.R.color.transparent)
+            navHomeIcon.imageTintList = ColorStateList.valueOf(Color.WHITE)
+            navProfile.setBackgroundResource(R.drawable.white_semi_rounded)
+            navProfileIcon.imageTintList = ColorStateList.valueOf(Color.parseColor("#67058A"))
         }
 
         navHome.setOnClickListener    { showHome() }
         navProfile.setOnClickListener { showProfile() }
         showHome()
 
+        // -------- LOAD USERNAME --------
+        val tvUsername = findViewById<TextView>(R.id.tvUsername)
+
+        val database   = FirebaseDatabase.getInstance("https://soundcheck-db-default-rtdb.asia-southeast1.firebasedatabase.app")
+        val accountRef = database.getReference("account")
+
+        accountRef.child("username").get()
+            .addOnSuccessListener { snapshot ->
+                val username = snapshot.getValue(String::class.java) ?: "Username"
+                tvUsername.text = username
+            }
+            .addOnFailureListener {
+                tvUsername.text = "Username"
+            }
+
         // -------- PROFILE MENU --------
-        val menuAccountInfo  = findViewById<LinearLayout>(R.id.menuAccountInfo)
-        val menuManageRooms  = findViewById<LinearLayout>(R.id.menuManageRooms)
-        val menuHelp         = findViewById<LinearLayout>(R.id.menuHelp)
+        val menuAccountInfo = findViewById<LinearLayout>(R.id.menuAccountInfo)
+        val menuManageRooms = findViewById<LinearLayout>(R.id.menuManageRooms)
+        val menuHelp        = findViewById<LinearLayout>(R.id.menuHelp)
 
         menuAccountInfo.setOnClickListener {
-            // TODO: navigate to Account Information screen
+            startActivity(Intent(this, AccInformationActivity::class.java))
         }
 
         menuManageRooms.setOnClickListener {
-            // TODO: navigate to Manage Rooms & Devices screen
+            // Soon
         }
 
         menuHelp.setOnClickListener {
             startActivity(Intent(this, HelpFeaturesActivity::class.java))
         }
 
+        btnLogout.setOnClickListener {
+            startActivity(Intent(this, LoginActivity::class.java))
+            finish()
+        }
+
         // -------- TAB TOGGLE --------
-        fun selectTab(selectedBtn: Button, unselectedBtn: Button) {
-            ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = 250
-                interpolator = DecelerateInterpolator()
-                addUpdateListener {
-                    val fraction = it.animatedFraction
-                    selectedBtn.backgroundTintList = ColorStateList.valueOf(
-                        ArgbEvaluator().evaluate(fraction, Color.TRANSPARENT, Color.WHITE) as Int
-                    )
-                    unselectedBtn.backgroundTintList = ColorStateList.valueOf(
-                        ArgbEvaluator().evaluate(fraction, Color.WHITE, Color.TRANSPARENT) as Int
-                    )
-                    selectedBtn.setTextColor(
-                        ArgbEvaluator().evaluate(fraction, Color.WHITE, Color.parseColor("#8B00FF")) as Int
-                    )
-                    unselectedBtn.setTextColor(
-                        ArgbEvaluator().evaluate(fraction, Color.parseColor("#8B00FF"), Color.WHITE) as Int
-                    )
-                }
-            }.start()
+        fun selectTab(
+            selectedLayout: LinearLayout, selectedText: TextView,
+            unselectedLayout: LinearLayout, unselectedText: TextView
+        ) {
+            selectedLayout.setBackgroundResource(R.drawable.white_semi_rounded)
+            selectedText.setTextColor(Color.parseColor("#67058A"))
+            unselectedLayout.setBackgroundResource(android.R.color.transparent)
+            unselectedText.setTextColor(Color.WHITE)
         }
 
-        selectTab(btnRooms, btnDevices)
+        selectTab(btnRooms, tvRooms, btnDevices, tvDevices)
 
-        toggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (isChecked) {
-                when (checkedId) {
-                    R.id.btnRooms -> {
-                        selectTab(btnRooms, btnDevices)
-                        roomRecycler.visibility   = View.VISIBLE
-                        deviceRecycler.visibility = View.GONE
-                    }
-                    R.id.btnDevices -> {
-                        selectTab(btnDevices, btnRooms)
-                        roomRecycler.visibility   = View.GONE
-                        deviceRecycler.visibility = View.VISIBLE
-                    }
-                }
-            }
-        }
-
-        // -------- ROOMS RECYCLER --------
-        roomRecycler.layoutManager = GridLayoutManager(this, 2)
-
-        val devices = listOf(
-            Device("1", "SoundCheck #1", "7th Floor"),
+        // -------- DATA --------
+        val allDevices = mutableListOf(
+            Device("1", "SoundCheck #1", "7th Floor")
         )
 
-        val deviceAdapter = DeviceAdapter(devices) { device ->
+        val rooms = listOf(
+            Room("1", "7th Floor")
+        )
+
+        // -------- DEVICE ADAPTER --------
+        val deviceAdapter = DeviceAdapter(allDevices) { device ->
             val intent = Intent(this, DeviceDetailActivity::class.java).apply {
                 putExtra("device_name", device.name)
                 putExtra("device_room", device.room)
             }
             startActivity(intent)
         }
-        roomRecycler.adapter = deviceAdapter
 
-        // -------- DEVICES RECYCLER --------
+        // -------- ROOM ADAPTER --------
+        val roomAdapter = RoomAdapter(rooms) { room ->
+            val filtered = allDevices.filter { it.room == room.name }
+            deviceAdapter.updateDevices(filtered)
+            roomRecycler.visibility   = View.GONE
+            deviceRecycler.visibility = View.VISIBLE
+        }
+
+        // -------- TAB CLICKS --------
+        btnRooms.setOnClickListener {
+            selectTab(btnRooms, tvRooms, btnDevices, tvDevices)
+            roomRecycler.visibility   = View.VISIBLE
+            deviceRecycler.visibility = View.GONE
+        }
+
+        btnDevices.setOnClickListener {
+            selectTab(btnDevices, tvDevices, btnRooms, tvRooms)
+            roomRecycler.visibility   = View.GONE
+            deviceRecycler.visibility = View.VISIBLE
+        }
+
+        // -------- RECYCLERS --------
+        roomRecycler.layoutManager = GridLayoutManager(this, 2)
+        roomRecycler.adapter = roomAdapter
+
         deviceRecycler.layoutManager = GridLayoutManager(this, 2)
         deviceRecycler.adapter = deviceAdapter
     }

@@ -17,7 +17,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SoundCheck">
         <activity
-            android:name=".MainActivity"
+            android:name=".LoginActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -27,7 +27,9 @@
         <activity
             android:name=".DeviceDetailActivity"
             android:theme="@style/DarkNumberPickerTheme"/>
+        <activity android:name=".MainActivity" />
         <activity android:name=".HelpFeaturesActivity" />
+        <activity android:name=".AccInformationActivity" />
         <meta-data
             android:name="preloaded_fonts"
             android:resource="@array/preloaded_fonts" />
