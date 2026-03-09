@@ -186,7 +186,7 @@ class DeviceDetailActivity : AppCompatActivity() {
         }
 
         // Default tab matches XML visibility="visible" on durationView
-        selectDuration()
+        selectNoiseLimit()
 
         btnNoiseLimit.setOnClickListener { selectNoiseLimit() }
         btnDuration.setOnClickListener   { selectDuration() }
