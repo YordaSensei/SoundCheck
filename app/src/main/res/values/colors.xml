@@ -6,4 +6,5 @@
     <color name="purple">#A425D2</color>
     <color name="dark_purple">#67058A</color>
     <color name="light_purple">#A900C7</color>
+    <color name="light_background">#F7F3F7</color>
 </resources>
