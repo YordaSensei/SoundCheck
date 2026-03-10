@@ -57,6 +57,7 @@
         app:boxCornerRadiusTopStart="12dp"
         app:boxStrokeWidth="0dp"
         app:boxStrokeWidthFocused="0dp"
+        app:hintTextColor="@color/dark_purple"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tvUsernameLabel">
@@ -67,7 +68,7 @@
             android:layout_height="64dp"
             android:background="@drawable/offwhite_semi_rounded"
             android:fontFamily="@font/poppins"
-            android:hint="Enter username"
+            android:textColorHint="@color/dark_purple"
             android:inputType="text"
             android:paddingStart="16dp"
             android:textColor="@color/black"
@@ -103,6 +104,7 @@
         app:boxStrokeWidth="0dp"
         app:boxStrokeWidthFocused="0dp"
         app:endIconMode="password_toggle"
+        app:endIconTint="@color/black"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tvPasswordLabel">
@@ -113,7 +115,6 @@
             android:layout_height="64dp"
             android:background="@drawable/offwhite_semi_rounded"
             android:fontFamily="@font/poppins"
-            android:hint="Enter password"
             android:inputType="textPassword"
             android:paddingStart="16dp"
             android:textColor="@color/black"
